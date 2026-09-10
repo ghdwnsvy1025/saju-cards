@@ -1,0 +1,42 @@
+name: 매일 릴스 발행
+
+# 매일 한국시간 밤 9시에 자동 실행됩니다.
+# 깃허브 서버는 세계시(UTC)를 쓰므로 12:00 UTC = 한국 21:00 입니다.
+on:
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:        # 깃허브 화면에서 손으로도 돌릴 수 있게
+
+permissions:
+  contents: write           # queue.json 에 '올림' 표시를 하고 저장해야 하므로
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 가져오기
+        uses: actions/checkout@v4
+
+      - name: 파이썬 준비
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 필요한 것 설치
+        run: pip install requests
+
+      - name: 인스타에 발행
+        env:
+          IG_TOKEN: ${{ secrets.IG_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          GH_USER: ${{ github.repository_owner }}
+          GH_REPO: ${{ github.event.repository.name }}
+        run: python publish.py
+
+      - name: 발행 기록 저장
+        run: |
+          git config user.name "saju-bot"
+          git config user.email "saju-bot@users.noreply.github.com"
+          git add queue.json
+          git diff --staged --quiet || git commit -m "발행 완료 $(date -u +%Y-%m-%d)"
+          git push
