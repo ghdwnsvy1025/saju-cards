@@ -40,6 +40,7 @@ jobs:
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           GH_USER: ${{ github.repository_owner }}
           GH_REPO: ${{ github.event.repository.name }}
+          GITHUB_SHA: ${{ github.sha }}     # 영상 주소에 커밋 번호를 붙여 캐시를 피한다
         run: python publish.py
 
       - name: 발행 기록 저장
