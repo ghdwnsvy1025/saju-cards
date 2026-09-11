@@ -43,6 +43,13 @@ def 오류설명(응답):
 
 def 실행():
     목록 = json.loads(목록파일.read_text(encoding="utf-8"))
+
+    # 하루에 한 장만. 예비 실행(밤 10시)이나 손으로 누른 실행이 겹쳐도 두 번 올리지 않는다.
+    오늘 = datetime.now(한국시간).strftime("%Y-%m-%d")
+    if any((x.get("published_at") or "").startswith(오늘) for x in 목록["items"]):
+        print(f"오늘({오늘})은 이미 한 장 올렸습니다. 내일 다시 올립니다.")
+        return 0
+
     대기 = [x for x in 목록["items"] if x.get("status") == "pending"]
 
     if not 대기:
