@@ -57,22 +57,36 @@ def 실행():
         return 0
 
     항목 = 대기[0]
-    영상주소 = (
-        f"https://cdn.jsdelivr.net/gh/{사용자}/{저장소}@main/videos/{항목['video']}"
-    )
+
+    # '@main' 대신 커밋 번호로 부른다.
+    # @main 은 배달 서버(jsDelivr)가 옛 파일을 최대 12시간 캐시해 두고 계속 내주는 바람에,
+    # 새 영상을 올려도 옛 영상이 발행됐다(2026-09-11, 9:16 옛 영상이 올라감).
+    # 커밋 번호는 올릴 때마다 달라지므로 캐시가 끼어들 수 없다.
+    커밋 = os.environ.get("GITHUB_SHA") or "main"
+    영상주소 = f"https://cdn.jsdelivr.net/gh/{사용자}/{저장소}@{커밋}/videos/{항목['video']}"
+    원본주소 = f"https://raw.githubusercontent.com/{사용자}/{저장소}/{커밋}/videos/{항목['video']}"
 
     print(f"오늘 올릴 카드: {항목['title']}")
     print(f"남은 카드: {len(대기)}장")
     print(f"영상 주소: {영상주소}")
 
-    # 영상 주소가 '영상'으로 제대로 인식되는지 먼저 확인
+    # 1) 배달 주소가 '영상'으로 제대로 인식되는지
     확인 = requests.get(영상주소, timeout=60, stream=True)
     종류 = 확인.headers.get("Content-Type", "")
+    배달크기 = int(확인.headers.get("Content-Length") or 0)
     확인.close()
     if 확인.status_code != 200 or "video" not in 종류:
         print(f"[실패] 영상 주소를 인스타가 못 읽습니다. HTTP {확인.status_code}, {종류}")
         return 1
-    print(f"주소 확인 완료 ({종류})")
+
+    # 2) 배달된 파일이 저장소 원본과 같은 파일인지 (크기 대조) — 캐시 사고 재발 방지
+    원본 = requests.get(원본주소, timeout=60, stream=True)
+    원본크기 = int(원본.headers.get("Content-Length") or 0)
+    원본.close()
+    if 원본크기 and 배달크기 != 원본크기:
+        print(f"[실패] 배달 주소가 옛 영상을 주고 있습니다. 배달 {배달크기:,} vs 원본 {원본크기:,} bytes")
+        return 1
+    print(f"주소 확인 완료 ({종류}, {배달크기:,} bytes, 원본과 일치)")
 
     # 1. 자리 만들기
     응답 = requests.post(
