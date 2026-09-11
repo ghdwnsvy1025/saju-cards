@@ -16,6 +16,7 @@
 """
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -41,11 +42,61 @@ def 오류설명(응답):
         return f"HTTP {응답.status_code}: {응답.text[:200]}"
 
 
+def 캡션제목(캡션: str) -> str:
+    """캡션 첫 줄의 [제목] 을 꺼낸다. 하로님이 직접 올린 게시물이 어느 카드인지 알아보기 위해."""
+    첫줄 = (캡션 or "").strip().split("\n")[0].strip()
+    m = re.match(r"^\[(.+?)\]$", 첫줄)
+    return m.group(1).strip() if m else ""
+
+
+def 인스타_오늘게시물(오늘: str):
+    """인스타 계정에 '오늘(한국시간)' 올라간 게시물을 가져온다.
+    자동이 올린 것이든 하로님이 폰으로 직접 올린 것이든 다 잡힌다."""
+    r = requests.get(
+        f"{본진}/{계정ID}/media",
+        params={"fields": "id,caption,timestamp", "limit": 10, "access_token": 토큰},
+        timeout=30,
+    )
+    if r.status_code != 200:
+        print(f"[알림] 최근 게시물을 못 읽었습니다({오류설명(r)}). 발행 기록만으로 판단합니다.")
+        return []
+    결과 = []
+    for m in r.json().get("data", []):
+        ts = m.get("timestamp")            # 예: 2026-09-11T15:01:57+0000
+        if not ts:
+            continue
+        t = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S%z").astimezone(한국시간)
+        if t.strftime("%Y-%m-%d") == 오늘:
+            결과.append(m)
+    return 결과
+
+
 def 실행():
     목록 = json.loads(목록파일.read_text(encoding="utf-8"))
-
-    # 하루에 한 장만. 예비 실행(밤 10시)이나 손으로 누른 실행이 겹쳐도 두 번 올리지 않는다.
     오늘 = datetime.now(한국시간).strftime("%Y-%m-%d")
+
+    # ── 하루에 한 장만 ────────────────────────────────────────
+    # 인스타에 오늘 게시물이 이미 있으면 건너뛴다.
+    # 하로님이 음악을 넣어 폰으로 직접 올린 날도 여기서 잡혀서, 자동이 알아서 비켜준다.
+    오늘게시물 = 인스타_오늘게시물(오늘)
+    if 오늘게시물:
+        바뀜 = False
+        for m in 오늘게시물:
+            제목 = 캡션제목(m.get("caption", ""))
+            for it in 목록["items"]:
+                if it.get("status") == "pending" and 제목 and it["title"] == 제목:
+                    it["status"] = "published"
+                    it["published_at"] = datetime.now(한국시간).strftime("%Y-%m-%d %H:%M")
+                    it["media_id"] = m["id"]
+                    it["note"] = "직접 올림"
+                    바뀜 = True
+                    print(f"발행 목록의 「{제목}」을 직접 올리셨네요. '올림'으로 표시합니다.")
+        if 바뀜:
+            목록파일.write_text(json.dumps(목록, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"오늘({오늘})은 이미 {len(오늘게시물)}장 올라가 있습니다. 자동 발행은 건너뜁니다.")
+        return 0
+
+    # 인스타를 못 읽었을 때를 대비한 두 번째 잠금 (발행 기록 기준)
     if any((x.get("published_at") or "").startswith(오늘) for x in 목록["items"]):
         print(f"오늘({오늘})은 이미 한 장 올렸습니다. 내일 다시 올립니다.")
         return 0
