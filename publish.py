@@ -71,7 +71,32 @@ def 인스타_오늘게시물(오늘: str):
     return 결과
 
 
+발행시각 = 18      # 한국시간 저녁 6시
+
+
+def 발행시각까지_기다리기():
+    """예약 실행이 저녁 6시보다 일찍 깨어나면 6시까지 기다린다.
+
+    왜: 깃허브 예약은 정해진 시각보다 몇 시간씩 늦게 도는 게 보통이다
+        (2026-09-12 관찰: 21:07 예약이 00:26에 실행, 약 3시간 지연).
+        그래서 일부러 오후 3시대에 걸어두고, 여기서 6시까지 기다린다.
+        늦게 깨어나면(이미 6시 지남) 바로 진행한다.
+    손으로 누른 실행(Run workflow)은 기다리지 않고 바로 올린다.
+    """
+    if os.environ.get("GITHUB_EVENT_NAME") != "schedule":
+        return
+    지금 = datetime.now(한국시간)
+    목표 = 지금.replace(hour=발행시각, minute=0, second=0, microsecond=0)
+    남은초 = (목표 - 지금).total_seconds()
+    if 남은초 <= 0:
+        return
+    남은초 = min(남은초, 4 * 3600)          # 혹시 몰라 최대 4시간까지만
+    print(f"예약이 일찍 깨어났습니다 ({지금:%H:%M}). 저녁 {발행시각}시까지 {int(남은초 // 60)}분 기다립니다.")
+    time.sleep(남은초)
+
+
 def 실행():
+    발행시각까지_기다리기()
     목록 = json.loads(목록파일.read_text(encoding="utf-8"))
     오늘 = datetime.now(한국시간).strftime("%Y-%m-%d")
 
