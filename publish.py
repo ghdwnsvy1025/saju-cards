@@ -71,7 +71,9 @@ def 인스타_오늘게시물(오늘: str):
     return 결과
 
 
-발행시각 = 18      # 한국시간 저녁 6시
+발행시각 = 19      # 한국시간 저녁 7시.
+                   # 하로님이 인스타 앱에서 6시로 예약해 두는 날과 겹치지 않게 한 시간 뒤다.
+                   # 예약이 올라간 날은 '오늘 게시물 있음'으로 건너뛰고, 깜빡한 날만 여기서 올린다.
 
 
 def 발행시각까지_기다리기():
@@ -112,7 +114,7 @@ def 실행():
         for m in 오늘게시물:
             제목 = 캡션제목(m.get("caption", ""))
             for it in 목록["items"]:
-                if it.get("status") == "pending" and 제목 and it["title"] == 제목:
+                if it.get("status") in ("pending", "scheduled") and 제목 and it["title"] == 제목:
                     it["status"] = "published"
                     it["published_at"] = datetime.now(한국시간).strftime("%Y-%m-%d %H:%M")
                     it["media_id"] = m["id"]
@@ -129,7 +131,14 @@ def 실행():
         print(f"오늘({오늘})은 이미 한 장 올렸습니다. 내일 다시 올립니다.")
         return 0
 
-    대기 = [x for x in 목록["items"] if x.get("status") == "pending"]
+    def 자동이_올려도_되는가(x):
+        if x.get("status") == "pending":
+            return True
+        # 하로님이 인스타 앱에서 예약해 둔 카드(scheduled)는 자동이 건드리지 않는다.
+        # 단, 예약 날짜가 됐는데도(여기까지 왔다 = 오늘 게시물이 없다) 안 올라왔으면 대신 올린다.
+        return x.get("status") == "scheduled" and (x.get("scheduled_for") or "9999-99-99") <= 오늘
+
+    대기 = [x for x in 목록["items"] if 자동이_올려도_되는가(x)]
 
     if not 대기:
         print("올릴 카드가 다 떨어졌습니다. queue.json 에 새 항목을 추가하세요.")
