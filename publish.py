@@ -86,11 +86,14 @@ def 발행시각까지_기다리기():
     if os.environ.get("GITHUB_EVENT_NAME") != "schedule":
         return
     지금 = datetime.now(한국시간)
+    if 지금.hour < 발행시각 - 4:
+        # 오후 2시 전에 깨어난 예약은 너무 이르다. 오늘 몫은 더 늦은 예약이 맡는다.
+        print(f"아직 이릅니다 ({지금:%H:%M}). 오후 {발행시각 - 4}시 이후 예약이 처리합니다.")
+        sys.exit(0)
     목표 = 지금.replace(hour=발행시각, minute=0, second=0, microsecond=0)
     남은초 = (목표 - 지금).total_seconds()
     if 남은초 <= 0:
         return
-    남은초 = min(남은초, 4 * 3600)          # 혹시 몰라 최대 4시간까지만
     print(f"예약이 일찍 깨어났습니다 ({지금:%H:%M}). 저녁 {발행시각}시까지 {int(남은초 // 60)}분 기다립니다.")
     time.sleep(남은초)
 
